@@ -1,19 +1,19 @@
 /**
- * Client half of @local/dsh-px0-preview.
+ * Client half of @dsh-xhl/dsh-px0-preview.
  *
  * Registers a right-sidebar tab type (kind "px0") that claims session file
  * addresses at the `extension` band — outranking the built-in text preview —
  * and renders px0 in a same-origin iframe pointed at the Host's /px0/ proxy.
  */
 window.__ModuleLoader__.load({
-  id: '@local/dsh-px0-preview',
+  id: '@dsh-xhl/dsh-px0-preview',
   factory(require) {
     const React = require('react');
     const h = React.createElement;
     const { useState, useEffect, useMemo, useCallback } = React;
 
     const NS = 'px0';
-    const PX0_ID = '@local/dsh-px0-preview';
+    const PX0_ID = '@dsh-xhl/dsh-px0-preview';
     const PX0_KIND = 'px0';
 
     const en = {

@@ -29,8 +29,8 @@ Or link it into a profile manually:
 
 ```json
 {
-  "dependencies": { "@local/dsh-px0-preview": "link:../path/to/dsh-px0/bundle" },
-  "dsh": { "profile": { "bundles": ["...", "@local/dsh-px0-preview"] } }
+  "dependencies": { "@dsh-xhl/dsh-px0-preview": "link:../path/to/dsh-px0/bundle" },
+  "dsh": { "profile": { "bundles": ["...", "@dsh-xhl/dsh-px0-preview"] } }
 }
 ```
 

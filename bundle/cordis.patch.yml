@@ -1,4 +1,4 @@
 - insert:
     - id: dsh-px0-preview
-      name: '@local/dsh-px0-preview'
+      name: '@dsh-xhl/dsh-px0-preview'
       config: {}

@@ -1,5 +1,5 @@
 /**
- * Host half of @local/dsh-px0-preview.
+ * Host half of @dsh-xhl/dsh-px0-preview.
  *
  * Owns four things for the Client tab:
  *  1. The px0 binary: resolved from Config.px0Path, then the bundle's bin/
