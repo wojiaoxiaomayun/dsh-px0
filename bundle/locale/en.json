@@ -1,0 +1,19 @@
+{
+  "meta": {
+    "title": "px0 Preview",
+    "description": "Preview workspace files with the px0 code viewer in the right sidebar."
+  },
+  "px0": {
+    "tabTitle": "px0",
+    "openWithPx0": "Open with px0",
+    "status.missing": "px0 binary not found. It will download on first start, or place px0 in the bundle bin/ directory.",
+    "status.downloading": "Downloading px0…",
+    "status.starting": "Starting px0…",
+    "status.updating": "Updating px0…",
+    "status.failed": "px0 failed to start.",
+    "retry": "Retry",
+    "updateAvailable": "px0 {version} available",
+    "update": "Update",
+    "updated": "Updated"
+  }
+}

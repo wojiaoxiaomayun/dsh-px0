@@ -1,0 +1,19 @@
+{
+  "meta": {
+    "title": "px0 预览",
+    "description": "在右侧栏中用 px0 代码查看器预览工作区文件。"
+  },
+  "px0": {
+    "tabTitle": "px0",
+    "openWithPx0": "用 px0 打开",
+    "status.missing": "未找到 px0 二进制。首次启动将自动下载，或手动将 px0 放入 bundle 的 bin/ 目录。",
+    "status.downloading": "正在下载 px0…",
+    "status.starting": "正在启动 px0…",
+    "status.updating": "正在更新 px0…",
+    "status.failed": "px0 启动失败。",
+    "retry": "重试",
+    "updateAvailable": "px0 {version} 可用",
+    "update": "更新",
+    "updated": "已更新"
+  }
+}

@@ -1,0 +1,12 @@
+# Downloaded px0 binary cache (platform-specific, re-fetched on demand).
+bin/
+
+# Node / tooling
+node_modules/
+*.log
+.DS_Store
+.Thumbs.db
+
+# Local scratch
+.playwright-cli/
+*.tmp
