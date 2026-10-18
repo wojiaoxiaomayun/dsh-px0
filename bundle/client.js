@@ -30,6 +30,7 @@ window.__ModuleLoader__.load({
       openExternal: 'Open in browser',
       openFolder: 'Open folder in File Explorer',
       openVsCode: 'Open folder in VS Code',
+      vsCodeMissing: 'VS Code not found',
       openFailed: 'Could not open the folder',
       'guide.description': 'Browse and preview the workspace in px0',
     };
@@ -47,6 +48,7 @@ window.__ModuleLoader__.load({
       openExternal: '在浏览器中打开',
       openFolder: '在文件资源管理器中打开文件夹',
       openVsCode: '在 VS Code 中打开文件夹',
+      vsCodeMissing: '未检测到 VS Code',
       openFailed: '无法打开该文件夹',
       'guide.description': '用 px0 浏览与预览工作区文件',
     };
@@ -76,6 +78,27 @@ window.__ModuleLoader__.load({
       const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
       if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
       return body;
+    }
+
+    /**
+     * Ask the Host which desktop applications are actually installed.
+     * The open-in-app plugin resolves each catalog entry against the real
+     * system, so this is the authoritative answer: an app missing here cannot
+     * be launched and its button must not pretend otherwise.
+     * @returns {Promise<string[]>} installed catalog ids, e.g. ['explorer', 'vscode']
+     */
+    async function installedApps() {
+      try {
+        const res = await fetch('/open-in-app/apps', {
+          headers: { accept: 'application/json' },
+          cache: 'no-store',
+        });
+        if (!res.ok) return [];
+        const payload = await res.json();
+        return Array.isArray(payload.apps) ? payload.apps.filter((id) => typeof id === 'string') : [];
+      } catch {
+        return [];
+      }
     }
 
     /**
@@ -129,6 +152,8 @@ window.__ModuleLoader__.load({
       const [dir, setDir] = useState('');   // the directory sent to the Host
       const [dirInput, setDirInput] = useState(''); // the editable field's text
       const seenReady = React.useRef(false); // px0 has served this tab at least once
+      // Catalog ids the Host reports as installed; null until the first answer.
+      const [apps, setApps] = useState(null);
 
       const address = tab?.contentId ?? '';
       const filePath = useMemo(() => filePathOf(address), [address]);
@@ -145,6 +170,14 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         if (status.root) setDirInput(status.root);
       }, [status.root]);
+
+      // Resolve which desktop apps exist on this machine, so a button is only
+      // offered for something that can actually launch.
+      useEffect(() => {
+        let alive = true;
+        installedApps().then((list) => { if (alive) setApps(list); });
+        return () => { alive = false; };
+      }, []);
 
       // The px0 document posts its context-menu choices here; this side owns
       // the composer, so it appends the reference to the Session's draft.
@@ -293,20 +326,34 @@ window.__ModuleLoader__.load({
                 h('span', null, t('updateAvailable').replace('{version}', status.latestVersion)),
                 h('button', { style: btnStyle, onClick: update }, t('update')))
             : null,
-          h('button', {
-            style: iconBtnStyle,
-            title: t('openFolder'),
-            'aria-label': t('openFolder'),
-            disabled: !status.root,
-            onClick: () => openIn('explorer'),
-          }, h(FolderIcon)),
-          h('button', {
-            style: iconBtnStyle,
-            title: t('openVsCode'),
-            'aria-label': t('openVsCode'),
-            disabled: !status.root,
-            onClick: () => openIn('vscode'),
-          }, h(VsCodeIcon)),
+          // Only offer an "open in …" button for an app the Host reports as
+          // installed; `apps === null` means the answer has not arrived yet.
+          (apps === null || apps.includes('explorer'))
+            ? h('button', {
+                style: iconBtnStyle,
+                title: t('openFolder'),
+                'aria-label': t('openFolder'),
+                disabled: !status.root,
+                onClick: () => openIn('explorer'),
+              }, h(FolderIcon))
+            : null,
+          (apps === null || apps.includes('vscode'))
+            ? h('button', {
+                style: iconBtnStyle,
+                title: t('openVsCode'),
+                'aria-label': t('openVsCode'),
+                disabled: !status.root,
+                onClick: () => openIn('vscode'),
+              }, h(VsCodeIcon))
+            : null,
+          // VS Code is missing on this machine: say so instead of silently
+          // hiding the button, so the absence is explained rather than lost.
+          (apps !== null && !apps.includes('vscode'))
+            ? h('span', {
+                style: { fontSize: 11, opacity: 0.6, whiteSpace: 'nowrap' },
+                title: t('vsCodeMissing'),
+              }, t('vsCodeMissing'))
+            : null,
           h('button', {
             style: iconBtnStyle,
             title: t('openExternal'),
