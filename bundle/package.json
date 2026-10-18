@@ -1,9 +1,11 @@
 {
   "name": "@dsh-xhl/dsh-px0-preview",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "description": "Preview workspace files with px0 in the right sidebar.",
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

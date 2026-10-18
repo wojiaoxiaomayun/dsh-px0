@@ -6,6 +6,8 @@ A DSH (DeepSeek Harness) plugin that previews workspace files with [px0](https:/
 
 px0 is a fast, single-binary code IDE. This plugin embeds it in the Harness Web UI's right column, alongside the built-in file tree and previews.
 
+![dsh-px0 in the DSH right sidebar](docs/images/screenshot-dark.png)
+
 ## What it does
 
 - **Auto-downloads px0** for the current platform/arch from GitHub Releases on first start, verifies its sha256 against the release's `checksums.txt`, and caches it under `bin/`. A `px0Path` config overrides this with your own binary.
@@ -17,6 +19,8 @@ px0 is a fast, single-binary code IDE. This plugin embeds it in the Harness Web 
 - **Adds context-menu entries inside px0** that insert file references into the DSH composer:
   - file tree → `@file:<path>`
   - code selection → `@file:<path> lines:<fromLine>:<fromCol>-<toLine>:<toCol>`
+
+  ![Insert reference into composer from px0's context menu](docs/images/context-menu.png)
 - **Reports px0 updates**: checks the latest release once per run and offers an update button in the tab toolbar.
 
 ## Install

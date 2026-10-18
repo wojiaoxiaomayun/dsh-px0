@@ -10,3 +10,6 @@ node_modules/
 # Local scratch
 .playwright-cli/
 *.tmp
+
+# Rendered intro video frames
+video/frames/
