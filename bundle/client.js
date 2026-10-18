@@ -28,6 +28,9 @@ window.__ModuleLoader__.load({
       updateAvailable: 'px0 {version} available',
       update: 'Update',
       openExternal: 'Open in browser',
+      openFolder: 'Open folder in File Explorer',
+      openVsCode: 'Open folder in VS Code',
+      openFailed: 'Could not open the folder',
       'guide.description': 'Browse and preview the workspace in px0',
     };
     const zh = {
@@ -42,6 +45,9 @@ window.__ModuleLoader__.load({
       updateAvailable: 'px0 {version} 可用',
       update: '更新',
       openExternal: '在浏览器中打开',
+      openFolder: '在文件资源管理器中打开文件夹',
+      openVsCode: '在 VS Code 中打开文件夹',
+      openFailed: '无法打开该文件夹',
       'guide.description': '用 px0 浏览与预览工作区文件',
     };
 
@@ -70,6 +76,26 @@ window.__ModuleLoader__.load({
       const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
       if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
       return body;
+    }
+
+    /**
+     * Ask the Host to launch an installed desktop application on a directory.
+     * Reuses the product's own open-in-app endpoints, so the launch rules
+     * (which apps exist, how each is invoked) stay owned by that plugin rather
+     * than duplicated here.
+     * @param {string} app catalog id: 'explorer', 'vscode', …
+     * @param {string} path absolute directory to open
+     */
+    async function launchApp(app, path) {
+      const res = await fetch('/open-in-app/open', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ app, path }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || `HTTP ${res.status}`);
+      }
     }
 
     /**
@@ -230,6 +256,14 @@ window.__ModuleLoader__.load({
             )));
       }
 
+      /** Launch a desktop app on the directory px0 is currently serving. */
+      const openIn = (app) => {
+        if (!status.root) return;
+        launchApp(app, status.root).catch((e) => {
+          setStatus(prev => ({ ...prev, error: `${t('openFailed')}: ${String(e?.message || e)}` }));
+        });
+      };
+
       const applyDir = () => {
         const next = dirInput.trim();
         if (!next || next === status.root) return;
@@ -261,6 +295,20 @@ window.__ModuleLoader__.load({
             : null,
           h('button', {
             style: iconBtnStyle,
+            title: t('openFolder'),
+            'aria-label': t('openFolder'),
+            disabled: !status.root,
+            onClick: () => openIn('explorer'),
+          }, h(FolderIcon)),
+          h('button', {
+            style: iconBtnStyle,
+            title: t('openVsCode'),
+            'aria-label': t('openVsCode'),
+            disabled: !status.root,
+            onClick: () => openIn('vscode'),
+          }, h(VsCodeIcon)),
+          h('button', {
+            style: iconBtnStyle,
             title: t('openExternal'),
             'aria-label': t('openExternal'),
             onClick: () => window.open(`http://127.0.0.1:${status.port}/` + (filePath ? `?path=${encodeURIComponent(filePath)}` : ''), '_blank'),
@@ -274,17 +322,45 @@ window.__ModuleLoader__.load({
         }));
     }
 
-    /** External-link glyph: an arrow leaving a box, drawn in currentColor. */
-    function ExternalLinkIcon() {
+    /** Shared icon frame: a 13px stroked glyph in currentColor. */
+    function iconFrame(children) {
       return h('svg', {
         width: 13, height: 13, viewBox: '0 0 24 24', fill: 'none',
         stroke: 'currentColor', strokeWidth: 2,
         strokeLinecap: 'round', strokeLinejoin: 'round',
         'aria-hidden': true, focusable: 'false',
-      },
-      h('path', { d: 'M15 3h6v6' }),
-      h('path', { d: 'M10 14 21 3' }),
-      h('path', { d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' }));
+      }, children);
+    }
+
+    /** External-link glyph: an arrow leaving a box, drawn in currentColor. */
+    function ExternalLinkIcon() {
+      return iconFrame([
+        h('path', { key: 'a', d: 'M15 3h6v6' }),
+        h('path', { key: 'b', d: 'M10 14 21 3' }),
+        h('path', { key: 'c', d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' }),
+      ]);
+    }
+
+    /** Folder glyph: a tabbed folder outline. */
+    function FolderIcon() {
+      return iconFrame(h('path', {
+        key: 'f',
+        d: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+      }));
+    }
+
+    /**
+     * VS Code glyph: the product's angular ribbon mark, filled so it reads as
+     * a distinct application rather than another outline.
+     */
+    function VsCodeIcon() {
+      return h('svg', {
+        width: 13, height: 13, viewBox: '0 0 24 24',
+        fill: 'currentColor', stroke: 'none',
+        'aria-hidden': true, focusable: 'false',
+      }, h('path', {
+        d: 'M17.5 2.2 22 4.4v15.2l-4.5 2.2L7.9 12.6 4.5 15.2 3 14.4V9.6l1.5-.8L7.9 11.4zm0 4.1L11.6 12l5.9 5.7V6.3z',
+      }));
     }
 
     function Px0Title() {
