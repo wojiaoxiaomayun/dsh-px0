@@ -1,5 +1,7 @@
 # dsh-px0
 
+**English** | [简体中文](README.zh-CN.md)
+
 A DSH (DeepSeek Harness) plugin that previews workspace files with [px0](https://github.com/px0-ai/px0) in the right sidebar.
 
 px0 is a fast, single-binary code IDE. This plugin embeds it in the Harness Web UI's right column, alongside the built-in file tree and previews.
