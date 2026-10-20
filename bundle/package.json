@@ -1,6 +1,6 @@
 {
   "name": "@dsh-xhl/dsh-px0-preview",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "Preview workspace files with px0 in the right sidebar.",
   "publishConfig": {

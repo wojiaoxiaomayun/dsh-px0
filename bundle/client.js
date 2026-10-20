@@ -162,7 +162,12 @@ window.__ModuleLoader__.load({
       // a Session; the seat's Session is the fallback for a page tab.
       const sessionId = tab?.sessionId ?? seatSessionId;
       const sessionCwd = useSessions
-        ? useSessions((snap) => snap?.byId?.[sessionId]?.cwd ?? snap?.sessions?.[sessionId]?.cwd ?? undefined)
+        ? useSessions((snap) =>
+            snap?.byId?.[sessionId]?.cwd
+            ?? snap?.sessions?.[sessionId]?.cwd
+            ?? snap?.byId?.[sessionId]?.workingDirectory
+            ?? snap?.sessions?.[sessionId]?.workingDirectory
+            ?? undefined)
         : undefined;
 
       // Keep the editable field in step with the Host's actual root unless the
@@ -199,13 +204,18 @@ window.__ModuleLoader__.load({
       // The iframe is torn down while the restart runs, so the user sees the
       // in-panel loading state rather than a browser fetch error.
       useEffect(() => {
-        if (!sessionCwd || sessionCwd === dir) return;
+        if (!sessionCwd) return;
+        // Send openRoot when the cwd changed OR when the Host is serving no
+        // root at all (fresh machine: warm-up start could not name a
+        // workspace, so it must be told once the Session's cwd is known).
+        const hostHasNoRoot = status.state !== 'idle' && !status.root;
+        if (sessionCwd === dir && !hostHasNoRoot) return;
         setDir(sessionCwd);
         setStatus(prev => ({ ...prev, state: 'starting' }));
         control('openRoot', { root: sessionCwd })
           .then(s => { setStatus(s); setTick(n => n + 1); })
           .catch(e => setStatus({ state: 'failed', error: String(e?.message || e) }));
-      }, [sessionCwd]);
+      }, [sessionCwd, status.root, status.state]);
 
       // px0 is a full IDE, so it wants the whole column. The sidebar owns the
       // presentation mode; its toggleFullscreen resolves a target from live

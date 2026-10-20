@@ -26,6 +26,35 @@ import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import { PX0_EXTRAS_SCRIPT } from './px0-extras.js';
 
+// Node's fetch (undici) ignores the OS "global proxy" setting entirely, so a
+// machine that can only reach GitHub through a proxy fails every download
+// even though the browser works. Route our fetches through a proxy taken
+// from the environment, falling back to the Windows registry setting.
+async function setupProxy() {
+  try {
+    let proxy = process.env.HTTPS_PROXY || process.env.https_proxy
+      || process.env.HTTP_PROXY || process.env.http_proxy || '';
+    if (!proxy && process.platform === 'win32') {
+      const { execSync } = await import('node:child_process');
+      const out = execSync(
+        'reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyServer',
+        { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true, timeout: 3000 }).toString();
+      const enabled = execSync(
+        'reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyEnable',
+        { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true, timeout: 3000 }).toString();
+      const server = out.match(/ProxyServer\s+REG_SZ\s+(\S+)/)?.[1];
+      const on = /ProxyEnable\s+REG_DWORD\s+0x1\b/.test(enabled);
+      if (server && on) proxy = `http://${server}`;
+    }
+    if (!proxy) return;
+    // undici ships inside the dsh host package; Node's resolution walks up
+    // from this file and finds it there. The plugin bundle does not carry it.
+    const undici = await import('undici');
+    undici.setGlobalDispatcher(new undici.ProxyAgent(proxy));
+  } catch { /* no proxy configured or undici unresolvable: fetch stays direct */ }
+}
+const proxyReady = setupProxy();
+
 const REPO = 'px0-ai/px0';
 const BASE_PATH = '/px0/';
 const BIN_DIR = join(dirname(fileURLToPath(import.meta.url)), 'bin');
@@ -66,29 +95,53 @@ async function fetchText(url, signal) {
 }
 
 async function latestRelease(signal) {
+  const timeout = AbortSignal.timeout(15000);
   try {
-    const j = await fetchJson(`https://api.github.com/repos/${REPO}/releases/latest`, signal);
+    const j = await fetchJson(`https://api.github.com/repos/${REPO}/releases/latest`,
+      signal ? AbortSignal.any([signal, timeout]) : timeout);
     return { version: String(j.tag_name || '').replace(/^v/, ''), assets: j.assets || [] };
   } catch {
-    const v = (await fetchText(`https://raw.githubusercontent.com/${REPO}/master/VERSION`, signal)).trim();
+    const v = (await fetchText(`https://raw.githubusercontent.com/${REPO}/master/VERSION`,
+      signal ? AbortSignal.any([signal, timeout]) : timeout)).trim();
     return { version: v, assets: [] };
   }
 }
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function downloadBinary(version, signal) {
   const name = assetName(version);
   const tmp = `${BIN_PATH}.download`;
   await fs.mkdir(BIN_DIR, { recursive: true });
+  // A leftover temp from a killed run must not confuse this attempt.
+  await fs.rm(tmp, { force: true }).catch(() => {});
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await sleep(1000 * attempt);
+    try {
+      return await downloadOnce(name, version, tmp, signal);
+    } catch (e) {
+      if (String(e?.message).includes('mismatch')) throw e;
+      lastError = e;
+      await fs.rm(tmp, { force: true }).catch(() => {});
+    }
+  }
+  throw lastError;
+}
+
+async function downloadOnce(name, version, tmp, signal) {
+  const timeout = AbortSignal.timeout(5 * 60 * 1000);
+  const sig = signal ? AbortSignal.any([signal, timeout]) : timeout;
   try {
     const res = await fetch(`https://github.com/${REPO}/releases/download/v${version}/${name}`, {
-      signal, headers: { 'user-agent': 'dsh-px0-preview' },
+      signal: sig, headers: { 'user-agent': 'dsh-px0-preview' },
     });
     if (!res.ok || !res.body) throw new Error(`download ${name} -> ${res.status}`);
     await pipeline(Readable.fromWeb(res.body), createWriteStream(tmp));
     // Verify against the release checksums when reachable; a checksums fetch
     // failure is tolerated, a proven mismatch is not.
     try {
-      const sums = await fetchText(`https://github.com/${REPO}/releases/download/v${version}/checksums.txt`, signal);
+      const sums = await fetchText(`https://github.com/${REPO}/releases/download/v${version}/checksums.txt`, sig);
       const line = sums.split(/\r?\n/).find(l => l.includes(name));
       const expected = line?.match(/[0-9a-f]{64}/)?.[0];
       if (expected) {
@@ -166,11 +219,20 @@ function loadingPage(state, error) {
   ${detail ? `<div class="err">${detail}</div>` : ''}
 </div>
 <script>
+  var retries = 0;
   (function poll() {
     fetch('/px0-api/status', { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (s) {
         if (s && s.state === 'ready' && s.port) { location.reload(); return; }
+        // A failed start (e.g. a download reset) retries a few times on its
+        // own instead of stranding the user on an error page.
+        if (s && s.state === 'failed' && retries < 3) {
+          retries++;
+          fetch('/px0-api/start', { cache: 'no-store' }).catch(function () {});
+          setTimeout(poll, 3000);
+          return;
+        }
         setTimeout(poll, 700);
       })
       .catch(function () { setTimeout(poll, 1200); });
@@ -232,7 +294,9 @@ class Px0PreviewService {
       return this.config.px0Path;
     }
     try {
-      await fs.access(BIN_PATH);
+      await proxyReady;
+      const st = await fs.stat(BIN_PATH);
+      if (st.size < 1024 * 1024) throw new Error('cached px0 looks truncated');
       return BIN_PATH;
     } catch { /* fall through to download */ }
     const rel = await latestRelease(signal);
@@ -276,7 +340,13 @@ class Px0PreviewService {
   async workspaceRoot() {
     if (this.rootHint) return this.rootHint;
     const wd = this.ctx.get('workingDirectory');
-    return wd?.defaultDirectory || process.cwd();
+    const dir = wd?.defaultDirectory;
+    // Never fall back to process.cwd(): on an installed machine that is the
+    // DSH installation directory, so px0 would come up "ready" serving the
+    // wrong tree and the user sees no workspace files. Wait for the Client's
+    // openRoot instead.
+    if (!dir) throw new Error('no workspace directory yet; waiting for the client to name one');
+    return dir;
   }
 
   async start() {
@@ -315,7 +385,12 @@ class Px0PreviewService {
           }).catch(() => {});
         }
       } catch (e) {
-        this.status = { ...this.status, state: this.status.state === 'idle' ? 'missing' : 'failed', error: String(e?.message || e) };
+        const msg = String(e?.message || e);
+        // "No workspace yet" is not a failure: the tab will name a root via
+        // openRoot and start then. Show the neutral waiting state instead of
+        // a scary error with a retry button.
+        const waiting = msg.includes('no workspace directory yet');
+        this.status = { ...this.status, state: waiting || this.status.state === 'idle' ? 'missing' : 'failed', error: waiting ? undefined : msg };
       } finally {
         this.inflight = null;
       }
